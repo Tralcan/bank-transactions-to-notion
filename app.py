@@ -29,8 +29,8 @@ def upload_file():
         if not file.filename.endswith('.xlsx'):
             return jsonify({"error": "File must be .xlsx"}), 400
 
-        # Leer el archivo .xlsx, omitiendo las primeras 3 filas
-        df = pd.read_excel(file, engine='openpyxl', skiprows=3)
+        # Leer el archivo .xlsx, omitiendo las primeras 2 filas
+        df = pd.read_excel(file, engine='openpyxl', skiprows=2)
         
         # Imprimir columnas para depuración
         print("Columnas del archivo:", df.columns.tolist())
