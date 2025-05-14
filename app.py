@@ -32,14 +32,32 @@ def upload_file():
         # Leer el archivo .xlsx, omitiendo las primeras 3 filas
         df = pd.read_excel(file, engine='openpyxl', skiprows=3)
         
+        # Imprimir columnas para depuración
+        print("Columnas del archivo:", df.columns.tolist())
+        
+        # Verificar que la columna 'Fecha' existe
+        if 'Fecha' not in df.columns:
+            return jsonify({"error": f"Columna 'Fecha' no encontrada. Columnas disponibles: {df.columns.tolist()}"}), 400
+
         # Procesar cada fila y subir a Notion
         for _, row in df.iterrows():
-            # Convertir la fecha a formato ISO 8601
             fecha = row['Fecha']
+            if pd.isna(fecha) or not fecha:
+                continue  # Omite filas con fechas vacías
+            
+            # Convertir la fecha a formato ISO 8601
             if isinstance(fecha, str):
-                fecha = datetime.strptime(fecha, '%d-%m-%Y').isoformat()
+                try:
+                    fecha = datetime.strptime(fecha, '%d-%m-%Y').isoformat()
+                except ValueError:
+                    try:
+                        fecha = datetime.strptime(fecha, '%Y-%m-%d').isoformat()  # Otro formato posible
+                    except ValueError:
+                        return jsonify({"error": f"Formato de fecha inválido: {fecha}"}), 400
             elif isinstance(fecha, datetime):
                 fecha = fecha.isoformat()
+            else:
+                return jsonify({"error": f"Tipo de dato inválido para Fecha: {fecha}"}), 400
 
             # Preparar los datos para Notion
             properties = {
