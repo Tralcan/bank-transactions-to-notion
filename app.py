@@ -79,8 +79,11 @@ def upload_file():
             if len(detalle) > 2000:
                 print(f"Fila {index + 1}: Detalle demasiado largo, truncando")
                 detalle = detalle[:2000]
-            # Eliminar caracteres no válidos
-            detalle = re.sub(r'[^\x20-\x7E]', '', detalle)  # Solo caracteres ASCII imprimibles
+            # Eliminar caracteres no válidos y espacios múltiples
+            detalle = re.sub(r'[^\x20-\x7E]', '', detalle.strip())  # Solo caracteres ASCII imprimibles
+            if not detalle:
+                print(f"Fila {index + 1}: Detalle inválido después de limpieza, usando valor por defecto")
+                detalle = "Sin detalle"
 
             # Validar y convertir valores numéricos
             monto_cargo = float(row['Monto cargo ($)']) if pd.notnull(row['Monto cargo ($)']) else 0
@@ -96,13 +99,17 @@ def upload_file():
                 "Saldo ($)": {"number": saldo}
             }
 
-            # Crear una nueva página en la base de datos de Notion
-            notion.pages.create(
-                parent={"database_id": NOTION_DATABASE_ID},
-                properties=properties
-            )
-            print(f"Fila {index + 1}: Subida exitosamente")
-            uploaded_count += 1
+            try:
+                # Crear una nueva página en la base de datos de Notion
+                notion.pages.create(
+                    parent={"database_id": NOTION_DATABASE_ID},
+                    properties=properties
+                )
+                print(f"Fila {index + 1}: Subida exitosamente")
+                uploaded_count += 1
+            except Exception as e:
+                print(f"Fila {index + 1}: Error al subir a Notion: {str(e)}")
+                continue  # Continúa con la siguiente fila en lugar de fallar
 
         return jsonify({"message": f"Subidas {uploaded_count} de {len(df)} transacciones exitosamente a Notion"})
 
