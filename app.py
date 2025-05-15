@@ -50,93 +50,102 @@ def upload_file():
 
         # Contador para registros subidos
         uploaded_count = 0
+        batch_size = 10  # Procesar en lotes de 10 filas
         
-        # Procesar cada fila y subir a Notion
-        for index, row in df.iterrows():
-            try:
-                # Imprimir uso de memoria para depuración
-                process = psutil.Process()
-                mem_info = process.memory_info()
-                print(f"Fila {index + 1}: Memoria usada: {mem_info.rss / 1024 / 1024:.2f} MB")
-                
-                print(f"Procesando fila {index + 1}: {row.to_dict()}")  # Imprimir fila para depuración
-                
-                # Validar Fecha
-                fecha = row['Fecha']
-                if pd.isna(fecha) or not str(fecha).strip():
-                    print(f"Fila {index + 1}: Fecha vacía, omitiendo")
-                    continue
-                
-                # Convertir la fecha a formato ISO 8601
+        # Procesar en lotes
+        for start in range(0, total_rows, batch_size):
+            batch = df.iloc[start:start + batch_size]
+            print(f"Procesando lote: filas {start + 1} a {min(start + batch_size, total_rows)}")
+            
+            for index, row in batch.iterrows():
                 try:
-                    if isinstance(fecha, str):
-                        try:
-                            fecha = datetime.strptime(fecha, '%d-%m-%Y').isoformat()
-                        except ValueError:
-                            fecha = datetime.strptime(fecha, '%Y-%m-%d').isoformat()
-                    elif isinstance(fecha, datetime):
-                        fecha = fecha.isoformat()
-                    else:
-                        print(f"Fila {index + 1}: Tipo de dato inválido para Fecha: {fecha}")
+                    # Imprimir uso de memoria para depuración
+                    process = psutil.Process()
+                    mem_info = process.memory_info()
+                    print(f"Fila {index + 1}: Memoria usada: {mem_info.rss / 1024 / 1024:.2f} MB")
+                    
+                    print(f"Procesando fila {index + 1}: {row.to_dict()}")  # Imprimir fila para depuración
+                    
+                    # Validar Fecha
+                    fecha = row['Fecha']
+                    if pd.isna(fecha) or not str(fecha).strip():
+                        print(f"Fila {index + 1}: Fecha vacía, omitiendo")
                         continue
-                except ValueError as e:
-                    print(f"Fila {index + 1}: Formato de fecha inválido: {fecha}, error: {str(e)}")
-                    continue
+                    
+                    # Convertir la fecha a formato ISO 8601
+                    try:
+                        if isinstance(fecha, str):
+                            try:
+                                fecha = datetime.strptime(fecha, '%d-%m-%Y').isoformat()
+                            except ValueError:
+                                fecha = datetime.strptime(fecha, '%Y-%m-%d').isoformat()
+                        elif isinstance(fecha, datetime):
+                            fecha = fecha.isoformat()
+                        else:
+                            print(f"Fila {index + 1}: Tipo de dato inválido para Fecha: {fecha}")
+                            continue
+                    except ValueError as e:
+                        print(f"Fila {index + 1}: Formato de fecha inválido: {fecha}, error: {str(e)}")
+                        continue
 
-                # Validar y limpiar Detalle
-                detalle = str(row['Detalle']) if pd.notnull(row['Detalle']) else "Sin detalle"
-                if not detalle.strip():
-                    print(f"Fila {index + 1}: Detalle vacío, usando valor por defecto")
-                    detalle = "Sin detalle"
-                if len(detalle) > 2000:
-                    print(f"Fila {index + 1}: Detalle demasiado largo, truncando")
-                    detalle = detalle[:2000]
-                # Limpiar caracteres no válidos
-                detalle = re.sub(r'[^\x20-\x7E]', '', detalle.strip())  # Solo caracteres ASCII imprimibles
-                detalle = re.sub(r'\s+', ' ', detalle)  # Reemplazar espacios múltiples por uno
-                if not detalle:
-                    print(f"Fila {index + 1}: Detalle inválido después de limpieza, usando valor por defecto")
-                    detalle = "Sin detalle"
+                    # Validar y limpiar Detalle
+                    detalle = str(row['Detalle']) if pd.notnull(row['Detalle']) else "Sin detalle"
+                    if not detalle.strip():
+                        print(f"Fila {index + 1}: Detalle vacío, usando valor por defecto")
+                        detalle = "Sin detalle"
+                    if len(detalle) > 2000:
+                        print(f"Fila {index + 1}: Detalle demasiado largo, truncando")
+                        detalle = detalle[:2000]
+                    # Limpiar caracteres no válidos
+                    detalle = re.sub(r'[^\x20-\x7E]', '', detalle.strip())  # Solo caracteres ASCII imprimibles
+                    detalle = re.sub(r'\s+', ' ', detalle)  # Reemplazar espacios múltiples por uno
+                    if not detalle:
+                        print(f"Fila {index + 1}: Detalle inválido después de limpieza, usando valor por defecto")
+                        detalle = "Sin detalle"
 
-                # Validar y convertir valores numéricos
-                try:
-                    monto_cargo = float(row['Monto cargo ($)']) if pd.notnull(row['Monto cargo ($)']) and str(row['Monto cargo ($)']).strip() else 0
-                    monto_abono = float(row['Monto abono ($)']) if pd.notnull(row['Monto abono ($)']) and str(row['Monto abono ($)']).strip() else 0
-                    saldo = float(row['Saldo ($)']) if pd.notnull(row['Saldo ($)']) and str(row['Saldo ($)']).strip() else 0
-                except (ValueError, TypeError) as e:
-                    print(f"Fila {index + 1}: Error en valores numéricos: {str(e)}")
-                    continue
+                    # Validar y convertir valores numéricos
+                    try:
+                        monto_cargo = float(row['Monto cargo ($)']) if pd.notnull(row['Monto cargo ($)']) and str(row['Monto cargo ($)']).strip() else 0
+                        monto_abono = float(row['Monto abono ($)']) if pd.notnull(row['Monto abono ($)']) and str(row['Monto abono ($)']).strip() else 0
+                        saldo = float(row['Saldo ($)']) if pd.notnull(row['Saldo ($)']) and str(row['Saldo ($)']).strip() else 0
+                    except (ValueError, TypeError) as e:
+                        print(f"Fila {index + 1}: Error en valores numéricos: {str(e)}")
+                        continue
 
-                # Preparar los datos para Notion
-                properties = {
-                    "Fecha": {"date": {"start": fecha}},
-                    "Detalle": {"title": [{"text": {"content": detalle}}]},
-                    "Monto Cargo ($)": {"number": monto_cargo},
-                    "Monto Abono ($)": {"number": monto_abono},
-                    "Saldo ($)": {"number": saldo}
-                }
+                    # Preparar los datos para Notion
+                    properties = {
+                        "Fecha": {"date": {"start": fecha}},
+                        "Detalle": {"title": [{"text": {"content": detalle}}]},
+                        "Monto Cargo ($)": {"number": monto_cargo},
+                        "Monto Abono ($)": {"number": monto_abono},
+                        "Saldo ($)": {"number": saldo}
+                    }
 
-                # Imprimir datos enviados a Notion para depuración
-                print(f"Fila {index + 1}: Enviando a Notion: {properties}")
+                    # Imprimir datos enviados a Notion para depuración
+                    print(f"Fila {index + 1}: Enviando a Notion: {properties}")
 
-                # Crear una nueva página en la base de datos de Notion
-                notion.pages.create(
-                    parent={"database_id": NOTION_DATABASE_ID},
-                    properties=properties
-                )
-                print(f"Fila {index + 1}: Subida exitosamente")
-                uploaded_count += 1
+                    # Crear una nueva página en la base de datos de Notion
+                    notion.pages.create(
+                        parent={"database_id": NOTION_DATABASE_ID},
+                        properties=properties
+                    )
+                    print(f"Fila {index + 1}: Subida exitosamente")
+                    uploaded_count += 1
 
-                # Retraso para evitar límite de tasa de la API de Notion
-                time.sleep(1)
+                    # Retraso para evitar límite de tasa de la API de Notion
+                    time.sleep(0.5)  # Reducido a 0.5 segundos
 
-                # Liberar memoria
-                del properties
-                gc.collect()
+                    # Liberar memoria
+                    del properties
+                    gc.collect()
 
-            except Exception as e:
-                print(f"Fila {index + 1}: Error al subir a Notion: {str(e)}")
-                continue  # Continúa con la siguiente fila
+                except Exception as e:
+                    print(f"Fila {index + 1}: Error al subir a Notion: {str(e)}")
+                    continue  # Continúa con la siguiente fila
+
+            # Liberar memoria después de cada lote
+            del batch
+            gc.collect()
 
         # Liberar memoria después del bucle
         del df
