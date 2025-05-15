@@ -47,59 +47,63 @@ def upload_file():
         
         # Procesar cada fila y subir a Notion
         for index, row in df.iterrows():
-            print(f"Procesando fila {index + 1}: {row.to_dict()}")  # Imprimir fila para depuración
-            
-            # Validar Fecha
-            fecha = row['Fecha']
-            if pd.isna(fecha) or not fecha:
-                print(f"Fila {index + 1}: Fecha vacía, omitiendo")
-                continue  # Omite filas con fechas vacías
-            
-            # Convertir la fecha a formato ISO 8601
-            if isinstance(fecha, str):
-                try:
-                    fecha = datetime.strptime(fecha, '%d-%m-%Y').isoformat()
-                except ValueError:
-                    try:
-                        fecha = datetime.strptime(fecha, '%Y-%m-%d').isoformat()
-                    except ValueError:
-                        print(f"Fila {index + 1}: Formato de fecha inválido: {fecha}")
-                        continue  # Omite filas con fechas inválidas
-            elif isinstance(fecha, datetime):
-                fecha = fecha.isoformat()
-            else:
-                print(f"Fila {index + 1}: Tipo de dato inválido para Fecha: {fecha}")
-                continue  # Omite filas con tipos de datos inválidos
-
-            # Validar y limpiar Detalle
-            detalle = str(row['Detalle']) if pd.notnull(row['Detalle']) else "Sin detalle"
-            if not detalle.strip():
-                print(f"Fila {index + 1}: Detalle vacío, usando valor por defecto")
-                detalle = "Sin detalle"
-            if len(detalle) > 2000:
-                print(f"Fila {index + 1}: Detalle demasiado largo, truncando")
-                detalle = detalle[:2000]
-            # Eliminar caracteres no válidos y espacios múltiples
-            detalle = re.sub(r'[^\x20-\x7E]', '', detalle.strip())  # Solo caracteres ASCII imprimibles
-            if not detalle:
-                print(f"Fila {index + 1}: Detalle inválido después de limpieza, usando valor por defecto")
-                detalle = "Sin detalle"
-
-            # Validar y convertir valores numéricos
-            monto_cargo = float(row['Monto cargo ($)']) if pd.notnull(row['Monto cargo ($)']) else 0
-            monto_abono = float(row['Monto abono ($)']) if pd.notnull(row['Monto abono ($)']) else 0
-            saldo = float(row['Saldo ($)']) if pd.notnull(row['Saldo ($)']) else 0
-
-            # Preparar los datos para Notion
-            properties = {
-                "Fecha": {"date": {"start": fecha}},
-                "Detalle": {"title": [{"text": {"content": detalle}}]},
-                "Monto Cargo ($)": {"number": monto_cargo},
-                "Monto Abono ($)": {"number": monto_abono},
-                "Saldo ($)": {"number": saldo}
-            }
-
             try:
+                print(f"Procesando fila {index + 1}: {row.to_dict()}")  # Imprimir fila para depuración
+                
+                # Validar Fecha
+                fecha = row['Fecha']
+                if pd.isna(fecha) or not fecha:
+                    print(f"Fila {index + 1}: Fecha vacía, omitiendo")
+                    continue
+                
+                # Convertir la fecha a formato ISO 8601
+                if isinstance(fecha, str):
+                    try:
+                        fecha = datetime.strptime(fecha, '%d-%m-%Y').isoformat()
+                    except ValueError:
+                        try:
+                            fecha = datetime.strptime(fecha, '%Y-%m-%d').isoformat()
+                        except ValueError:
+                            print(f"Fila {index + 1}: Formato de fecha inválido: {fecha}")
+                            continue
+                elif isinstance(fecha, datetime):
+                    fecha = fecha.isoformat()
+                else:
+                    print(f"Fila {index + 1}: Tipo de dato inválido para Fecha: {fecha}")
+                    continue
+
+                # Validar y limpiar Detalle
+                detalle = str(row['Detalle']) if pd.notnull(row['Detalle']) else "Sin detalle"
+                if not detalle.strip():
+                    print(f"Fila {index + 1}: Detalle vacío, usando valor por defecto")
+                    detalle = "Sin detalle"
+                if len(detalle) > 2000:
+                    print(f"Fila {index + 1}: Detalle demasiado largo, truncando")
+                    detalle = detalle[:2000]
+                # Limpiar caracteres no válidos y espacios múltiples
+                detalle = re.sub(r'[\x00-\x1F\x7F-\x9F]', '', detalle.strip())  # Eliminar caracteres de control
+                detalle = re.sub(r'\s+', ' ', detalle)  # Reemplazar espacios múltiples por uno
+                if not detalle:
+                    print(f"Fila {index + 1}: Detalle inválido después de limpieza, usando valor por defecto")
+                    detalle = "Sin detalle"
+
+                # Validar y convertir valores numéricos
+                monto_cargo = float(row['Monto cargo ($)']) if pd.notnull(row['Monto cargo ($)']) else 0
+                monto_abono = float(row['Monto abono ($)']) if pd.notnull(row['Monto abono ($)']) else 0
+                saldo = float(row['Saldo ($)']) if pd.notnull(row['Saldo ($)']) else 0
+
+                # Preparar los datos para Notion
+                properties = {
+                    "Fecha": {"date": {"start": fecha}},
+                    "Detalle": {"title": [{"text": {"content": detalle}}]},
+                    "Monto Cargo ($)": {"number": monto_cargo},
+                    "Monto Abono ($)": {"number": monto_abono},
+                    "Saldo ($)": {"number": saldo}
+                }
+
+                # Imprimir datos enviados a Notion para depuración
+                print(f"Fila {index + 1}: Enviando a Notion: {properties}")
+
                 # Crear una nueva página en la base de datos de Notion
                 notion.pages.create(
                     parent={"database_id": NOTION_DATABASE_ID},
@@ -107,9 +111,10 @@ def upload_file():
                 )
                 print(f"Fila {index + 1}: Subida exitosamente")
                 uploaded_count += 1
+
             except Exception as e:
                 print(f"Fila {index + 1}: Error al subir a Notion: {str(e)}")
-                continue  # Continúa con la siguiente fila en lugar de fallar
+                continue  # Continúa con la siguiente fila
 
         return jsonify({"message": f"Subidas {uploaded_count} de {len(df)} transacciones exitosamente a Notion"})
 
