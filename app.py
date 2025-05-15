@@ -2,10 +2,12 @@ import os
 import pandas as pd
 import re
 import time
+import gc
 from flask import Flask, request, render_template, jsonify
 from notion_client import Client
 from dotenv import load_dotenv
 from datetime import datetime
+import psutil
 
 app = Flask(__name__)
 load_dotenv()
@@ -49,6 +51,11 @@ def upload_file():
         # Procesar cada fila y subir a Notion
         for index, row in df.iterrows():
             try:
+                # Imprimir uso de memoria para depuración
+                process = psutil.Process()
+                mem_info = process.memory_info()
+                print(f"Fila {index + 1}: Memoria usada: {mem_info.rss / 1024 / 1024:.2f} MB")
+                
                 print(f"Procesando fila {index + 1}: {row.to_dict()}")  # Imprimir fila para depuración
                 
                 # Validar Fecha
@@ -81,7 +88,7 @@ def upload_file():
                 if len(detalle) > 2000:
                     print(f"Fila {index + 1}: Detalle demasiado largo, truncando")
                     detalle = detalle[:2000]
-                # Limpiar caracteres no válidos, incluyendo Unicode problemático
+                # Limpiar caracteres no válidos
                 detalle = re.sub(r'[^\x20-\x7E]', '', detalle.strip())  # Solo caracteres ASCII imprimibles
                 detalle = re.sub(r'\s+', ' ', detalle)  # Reemplazar espacios múltiples por uno
                 if not detalle:
@@ -118,12 +125,20 @@ def upload_file():
                 uploaded_count += 1
 
                 # Retraso para evitar límite de tasa de la API de Notion
-                time.sleep(1)  # Aumentado a 1 segundo
+                time.sleep(1)
+
+                # Liberar memoria
+                del properties
+                gc.collect()
 
             except Exception as e:
                 print(f"Fila {index + 1}: Error al subir a Notion: {str(e)}")
                 continue  # Continúa con la siguiente fila
 
+        # Liberar memoria después del bucle
+        del df
+        gc.collect()
+        
         return jsonify({"message": f"Subidas {uploaded_count} de {len(df)} transacciones exitosamente a Notion"})
 
     except Exception as e:
