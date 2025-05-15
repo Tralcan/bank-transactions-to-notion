@@ -1,6 +1,7 @@
 import os
 import pandas as pd
 import re
+import time
 from flask import Flask, request, render_template, jsonify
 from notion_client import Client
 from dotenv import load_dotenv
@@ -80,17 +81,21 @@ def upload_file():
                 if len(detalle) > 2000:
                     print(f"Fila {index + 1}: Detalle demasiado largo, truncando")
                     detalle = detalle[:2000]
-                # Limpiar caracteres no válidos y espacios múltiples
-                detalle = re.sub(r'[\x00-\x1F\x7F-\x9F]', '', detalle.strip())  # Eliminar caracteres de control
+                # Limpiar caracteres no válidos, incluyendo Unicode problemático
+                detalle = re.sub(r'[^\x20-\x7E]', '', detalle.strip())  # Solo caracteres ASCII imprimibles
                 detalle = re.sub(r'\s+', ' ', detalle)  # Reemplazar espacios múltiples por uno
                 if not detalle:
                     print(f"Fila {index + 1}: Detalle inválido después de limpieza, usando valor por defecto")
                     detalle = "Sin detalle"
 
                 # Validar y convertir valores numéricos
-                monto_cargo = float(row['Monto cargo ($)']) if pd.notnull(row['Monto cargo ($)']) else 0
-                monto_abono = float(row['Monto abono ($)']) if pd.notnull(row['Monto abono ($)']) else 0
-                saldo = float(row['Saldo ($)']) if pd.notnull(row['Saldo ($)']) else 0
+                try:
+                    monto_cargo = float(row['Monto cargo ($)']) if pd.notnull(row['Monto cargo ($)']) else 0
+                    monto_abono = float(row['Monto abono ($)']) if pd.notnull(row['Monto abono ($)']) else 0
+                    saldo = float(row['Saldo ($)']) if pd.notnull(row['Saldo ($)']) else 0
+                except (ValueError, TypeError) as e:
+                    print(f"Fila {index + 1}: Error en valores numéricos: {str(e)}")
+                    continue
 
                 # Preparar los datos para Notion
                 properties = {
@@ -111,6 +116,9 @@ def upload_file():
                 )
                 print(f"Fila {index + 1}: Subida exitosamente")
                 uploaded_count += 1
+
+                # Retraso para evitar límite de tasa de la API de Notion
+                time.sleep(1)  # Aumentado a 1 segundo
 
             except Exception as e:
                 print(f"Fila {index + 1}: Error al subir a Notion: {str(e)}")
