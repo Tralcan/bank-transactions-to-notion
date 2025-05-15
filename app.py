@@ -39,6 +39,9 @@ def upload_file():
         # Imprimir columnas para depuración
         print("Columnas del archivo:", df.columns.tolist())
         
+        # Guardar el número de filas antes de procesar
+        total_rows = len(df)
+        
         # Verificar que las columnas esperadas existan
         expected_columns = ['Fecha', 'Detalle', 'Monto cargo ($)', 'Monto abono ($)', 'Saldo ($)']
         missing_columns = [col for col in expected_columns if col not in df.columns]
@@ -139,7 +142,7 @@ def upload_file():
         del df
         gc.collect()
         
-        return jsonify({"message": f"Subidas {uploaded_count} de {len(df)} transacciones exitosamente a Notion"})
+        return jsonify({"message": f"Subidas {uploaded_count} de {total_rows} transacciones exitosamente a Notion"})
 
     except Exception as e:
         print(f"Error general: {str(e)}")
