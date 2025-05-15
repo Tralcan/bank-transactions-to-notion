@@ -1,5 +1,6 @@
 import os
 import pandas as pd
+import re
 from flask import Flask, request, render_template, jsonify
 from notion_client import Client
 from dotenv import load_dotenv
@@ -35,14 +36,20 @@ def upload_file():
         # Imprimir columnas para depuración
         print("Columnas del archivo:", df.columns.tolist())
         
-        # Verificar que la columna 'Fecha' existe
-        if 'Fecha' not in df.columns:
-            return jsonify({"error": f"Columna 'Fecha' no encontrada. Columnas disponibles: {df.columns.tolist()}"}), 400
+        # Verificar que las columnas esperadas existan
+        expected_columns = ['Fecha', 'Detalle', 'Monto cargo ($)', 'Monto abono ($)', 'Saldo ($)']
+        missing_columns = [col for col in expected_columns if col not in df.columns]
+        if missing_columns:
+            return jsonify({"error": f"Columnas faltantes: {missing_columns}. Columnas encontradas: {df.columns.tolist()}"}), 400
 
+        # Contador para registros subidos
+        uploaded_count = 0
+        
         # Procesar cada fila y subir a Notion
         for index, row in df.iterrows():
             print(f"Procesando fila {index + 1}: {row.to_dict()}")  # Imprimir fila para depuración
             
+            # Validar Fecha
             fecha = row['Fecha']
             if pd.isna(fecha) or not fecha:
                 print(f"Fila {index + 1}: Fecha vacía, omitiendo")
@@ -64,7 +71,7 @@ def upload_file():
                 print(f"Fila {index + 1}: Tipo de dato inválido para Fecha: {fecha}")
                 continue  # Omite filas con tipos de datos inválidos
 
-            # Validar el campo Detalle
+            # Validar y limpiar Detalle
             detalle = str(row['Detalle']) if pd.notnull(row['Detalle']) else "Sin detalle"
             if not detalle.strip():
                 print(f"Fila {index + 1}: Detalle vacío, usando valor por defecto")
@@ -72,14 +79,21 @@ def upload_file():
             if len(detalle) > 2000:
                 print(f"Fila {index + 1}: Detalle demasiado largo, truncando")
                 detalle = detalle[:2000]
+            # Eliminar caracteres no válidos
+            detalle = re.sub(r'[^\x20-\x7E]', '', detalle)  # Solo caracteres ASCII imprimibles
+
+            # Validar y convertir valores numéricos
+            monto_cargo = float(row['Monto cargo ($)']) if pd.notnull(row['Monto cargo ($)']) else 0
+            monto_abono = float(row['Monto abono ($)']) if pd.notnull(row['Monto abono ($)']) else 0
+            saldo = float(row['Saldo ($)']) if pd.notnull(row['Saldo ($)']) else 0
 
             # Preparar los datos para Notion
             properties = {
                 "Fecha": {"date": {"start": fecha}},
                 "Detalle": {"title": [{"text": {"content": detalle}}]},
-                "Monto Cargo ($)": {"number": float(row['Monto cargo ($)']) if pd.notnull(row['Monto cargo ($)']) else 0},
-                "Monto Abono ($)": {"number": float(row['Monto abono ($)']) if pd.notnull(row['Monto abono ($)']) else 0},
-                "Saldo ($)": {"number": float(row['Saldo ($)']) if pd.notnull(row['Saldo ($)']) else 0}
+                "Monto Cargo ($)": {"number": monto_cargo},
+                "Monto Abono ($)": {"number": monto_abono},
+                "Saldo ($)": {"number": saldo}
             }
 
             # Crear una nueva página en la base de datos de Notion
@@ -88,8 +102,9 @@ def upload_file():
                 properties=properties
             )
             print(f"Fila {index + 1}: Subida exitosamente")
+            uploaded_count += 1
 
-        return jsonify({"message": f"Subidas {len(df)} transacciones exitosamente a Notion"})
+        return jsonify({"message": f"Subidas {uploaded_count} de {len(df)} transacciones exitosamente a Notion"})
 
     except Exception as e:
         print(f"Error general: {str(e)}")
