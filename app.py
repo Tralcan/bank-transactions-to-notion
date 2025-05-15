@@ -34,7 +34,7 @@ def upload_file():
             return jsonify({"error": "File must be .xlsx"}), 400
 
         # Leer el archivo .xlsx, omitiendo las primeras 2 filas
-        df = pd.read_excel(file, engine='openpyxl', skiprows=2)
+        df = pd.read_excel(file, engine='openpyxl', skiprows=2, dtype=str)  # Leer como strings para minimizar memoria
         
         # Imprimir columnas para depuración
         print("Columnas del archivo:", df.columns.tolist())
@@ -60,24 +60,24 @@ def upload_file():
                 
                 # Validar Fecha
                 fecha = row['Fecha']
-                if pd.isna(fecha) or not fecha:
+                if pd.isna(fecha) or not str(fecha).strip():
                     print(f"Fila {index + 1}: Fecha vacía, omitiendo")
                     continue
                 
                 # Convertir la fecha a formato ISO 8601
-                if isinstance(fecha, str):
-                    try:
-                        fecha = datetime.strptime(fecha, '%d-%m-%Y').isoformat()
-                    except ValueError:
+                try:
+                    if isinstance(fecha, str):
                         try:
-                            fecha = datetime.strptime(fecha, '%Y-%m-%d').isoformat()
+                            fecha = datetime.strptime(fecha, '%d-%m-%Y').isoformat()
                         except ValueError:
-                            print(f"Fila {index + 1}: Formato de fecha inválido: {fecha}")
-                            continue
-                elif isinstance(fecha, datetime):
-                    fecha = fecha.isoformat()
-                else:
-                    print(f"Fila {index + 1}: Tipo de dato inválido para Fecha: {fecha}")
+                            fecha = datetime.strptime(fecha, '%Y-%m-%d').isoformat()
+                    elif isinstance(fecha, datetime):
+                        fecha = fecha.isoformat()
+                    else:
+                        print(f"Fila {index + 1}: Tipo de dato inválido para Fecha: {fecha}")
+                        continue
+                except ValueError as e:
+                    print(f"Fila {index + 1}: Formato de fecha inválido: {fecha}, error: {str(e)}")
                     continue
 
                 # Validar y limpiar Detalle
@@ -97,9 +97,9 @@ def upload_file():
 
                 # Validar y convertir valores numéricos
                 try:
-                    monto_cargo = float(row['Monto cargo ($)']) if pd.notnull(row['Monto cargo ($)']) else 0
-                    monto_abono = float(row['Monto abono ($)']) if pd.notnull(row['Monto abono ($)']) else 0
-                    saldo = float(row['Saldo ($)']) if pd.notnull(row['Saldo ($)']) else 0
+                    monto_cargo = float(row['Monto cargo ($)']) if pd.notnull(row['Monto cargo ($)']) and str(row['Monto cargo ($)']).strip() else 0
+                    monto_abono = float(row['Monto abono ($)']) if pd.notnull(row['Monto abono ($)']) and str(row['Monto abono ($)']).strip() else 0
+                    saldo = float(row['Saldo ($)']) if pd.notnull(row['Saldo ($)']) and str(row['Saldo ($)']).strip() else 0
                 except (ValueError, TypeError) as e:
                     print(f"Fila {index + 1}: Error en valores numéricos: {str(e)}")
                     continue
